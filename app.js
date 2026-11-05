@@ -6,12 +6,13 @@ const KPIS = [
   ['Credit card debt total', 'CC debt'],
   ['Investment total (Fidelity)', 'Investments'],
   ['Net liquid (cash - CC debt)', 'Net liquid'],
-  ['Card spend last 30d (excl payments)', '30d spend'],
-  ['Confirmed recurring monthly estimate', 'Confirmed /mo'],
-  ['Likely recurring monthly estimate', 'Likely /mo'],
+  ['Card spend last 30d (excl payments)', '30d card spend'],
+  ['Confirmed recurring monthly estimate', 'Confirmed recurring /mo'],
+  ['Likely recurring monthly estimate', 'Likely recurring /mo'],
 ];
 
 const isNum = (n) => typeof n === 'number' && Number.isFinite(n);
+const negCls = (n) => isNum(n) && n < 0 ? ' neg' : '';
 const money = (n) => isNum(n) ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD' }) : '—';
 const esc = (v) => v == null ? '' : String(v).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -71,8 +72,8 @@ function renderAccounts(rows) {
       <td>${esc(r.account_name)}</td>
       <td>${r.mask ? `••${esc(r.mask)}` : ''}</td>
       <td>${esc(r.subtype)}</td>
-      <td class="num">${money(r.current_balance)}</td>
-      <td class="num">${money(r.available_balance)}</td>
+      <td class="num${negCls(r.current_balance)}">${money(r.current_balance)}</td>
+      <td class="num${negCls(r.available_balance)}">${money(r.available_balance)}</td>
       <td>${esc(r.as_of_date)}</td>
     </tr>`);
     return `<h3>${label}</h3>${table(

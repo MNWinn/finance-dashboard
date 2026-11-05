@@ -2,7 +2,7 @@
 
 Read-only personal finance dashboard for Matthew Winn. Public GitHub Pages site sourced from Money Manager’s Google Sheet via a daily JSON snapshot.
 
-**Live:** https://mnwinn.github.io/finance-dashboard/
+**Target site:** https://mnwinn.github.io/finance-dashboard/ (live once Pages is enabled — step 1 below).
 
 ## Setup (one-time)
 
@@ -15,6 +15,8 @@ Read-only personal finance dashboard for Matthew Winn. Public GitHub Pages site 
 Until the Action runs successfully, the site serves the seeded `data/*.json` snapshot.
 
 ## Local
+
+`npm ci` installs from the committed `package-lock.json` (the sync Action uses it too). `npm run sync` needs `GOOGLE_SERVICE_ACCOUNT_JSON` set.
 
 ```bash
 npm ci
