@@ -1,0 +1,13 @@
+{
+  "name": "finance-dashboard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test scripts/lib/parse.test.mjs",
+    "sync": "node scripts/sync-sheet.mjs"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "googleapis": "^144.0.0"
+  }
+}

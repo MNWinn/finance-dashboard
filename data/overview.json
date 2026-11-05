@@ -1,0 +1,38 @@
+{
+  "Last refreshed": {
+    "display": "2026-11-05T15:38:54-05:00",
+    "value": "2026-11-05T15:38:54-05:00"
+  },
+  "Cash total": {
+    "display": "$467.90",
+    "value": 467.9
+  },
+  "Credit card debt total": {
+    "display": "$857.23",
+    "value": 857.23
+  },
+  "Investment total (Fidelity)": {
+    "display": "$164,760.20",
+    "value": 164760.2
+  },
+  "Net liquid (cash - CC debt)": {
+    "display": "-$389.33",
+    "value": -389.33
+  },
+  "Card spend last 30d (excl payments)": {
+    "display": "$3,844.61",
+    "value": 3844.61
+  },
+  "Confirmed recurring monthly estimate": {
+    "display": "$772.23",
+    "value": 772.23
+  },
+  "Likely recurring monthly estimate": {
+    "display": "$0.00",
+    "value": 0.0
+  },
+  "Data gaps": {
+    "display": "No Chase checking/savings linked; card due dates/APRs null; rent/mortgage not in window; Robinhood/Coinbase not in Finance",
+    "value": "No Chase checking/savings linked; card due dates/APRs null; rent/mortgage not in window; Robinhood/Coinbase not in Finance"
+  }
+}

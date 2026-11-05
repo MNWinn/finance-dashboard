@@ -1,0 +1,37 @@
+[
+  {
+    "category_primary": "FOOD_AND_DRINK",
+    "total_out_30d": 1059.65,
+    "pct_of_spend": 0.2731
+  },
+  {
+    "category_primary": "GENERAL_MERCHANDISE",
+    "total_out_30d": 657.3,
+    "pct_of_spend": 0.1694
+  },
+  {
+    "category_primary": "TRAVEL",
+    "total_out_30d": 541.61,
+    "pct_of_spend": 0.1396
+  },
+  {
+    "category_primary": "TRANSPORTATION",
+    "total_out_30d": 539.94,
+    "pct_of_spend": 0.1391
+  },
+  {
+    "category_primary": "ENTERTAINMENT",
+    "total_out_30d": 461.37,
+    "pct_of_spend": 0.1189
+  },
+  {
+    "category_primary": "GENERAL_SERVICES",
+    "total_out_30d": 390.01,
+    "pct_of_spend": 0.1005
+  },
+  {
+    "category_primary": "PERSONAL_CARE",
+    "total_out_30d": 230.66,
+    "pct_of_spend": 0.0594
+  }
+]

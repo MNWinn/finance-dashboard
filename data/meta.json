@@ -1,0 +1,8 @@
+{
+  "last_refreshed": "2026-11-05T15:38:54-05:00",
+  "owner_agent": "Money Manager",
+  "intended_consumer": "Dev-built website dashboard",
+  "gaps": "No Chase checking/savings linked; card due dates/APRs null; rent/mortgage not observed in window; Robinhood/Coinbase balances not in Finance sheet (trading bots separate)",
+  "refresh_cadence": "daily",
+  "transactions_window": "2026-10-06 to 2026-11-05 (~30d)"
+}
