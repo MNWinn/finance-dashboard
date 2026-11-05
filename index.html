@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Finance</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Finance</h1>
+    <span id="refreshed" class="muted">Loading…</span>
+  </header>
+
+  <div id="gaps" class="banner" role="status" hidden></div>
+  <div id="stale" class="banner" role="alert" hidden></div>
+
+  <main>
+    <div id="kpis" class="kpis"></div>
+
+    <nav class="sections">
+      <a href="#accounts">Accounts</a>
+      <a href="#recurring">Recurring</a>
+      <a href="#spend">Spend</a>
+    </nav>
+
+    <h2>Accounts</h2>
+    <section id="accounts" class="card"></section>
+
+    <h2>Recurring</h2>
+    <section id="recurring" class="card"></section>
+
+    <h2>Spend by category (30d)</h2>
+    <section id="spend" class="card"></section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
