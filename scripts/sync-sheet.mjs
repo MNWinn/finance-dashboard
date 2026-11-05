@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { google } from 'googleapis';
-import { parseOverview, parseTable } from './lib/parse.mjs';
+import { parseOverview, parseTable, normalizePct, findEmptyOverwrites } from './lib/parse.mjs';
 
 const SHEET_ID = '1QYxStHP2I6AU9QmB5-XVkUHa7FrvqRzGwtnJZx2sk3U';
 const OUT = fileURLToPath(new URL('../data/', import.meta.url));
@@ -28,6 +28,11 @@ async function values(sheets, range) {
   return res.data.values || [];
 }
 
+function readExisting(name) {
+  const p = path.join(OUT, name);
+  return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : null;
+}
+
 function writeJson(name, data) {
   const p = path.join(OUT, name);
   const next = JSON.stringify(data, null, 2) + '\n';
@@ -37,23 +42,32 @@ function writeJson(name, data) {
   return true;
 }
 
+function isDataRow(r) {
+  return r && r.some(c => c !== '' && c != null);
+}
+
 function table(vals) {
   if (vals.length === 0) return [];
   return parseTable(vals[0], vals.slice(1));
 }
 
-// The dashboard expects pct_of_spend as a 0–1 fraction; the sheet may render it as "27.31%".
 function parseSpend(vals) {
   const rows = table(vals);
   if (rows.length === 0) return rows;
   const pctIdx = vals[0].indexOf('pct_of_spend');
-  const dataRows = vals.slice(1).filter(r => r && r.some(c => c !== '' && c != null));
-  return rows.map((r, i) => {
-    let pct = r.pct_of_spend;
-    const raw = pctIdx >= 0 ? dataRows[i]?.[pctIdx] : undefined;
-    if (pct != null && (String(raw ?? '').includes('%') || pct > 1)) pct = pct / 100;
-    return { ...r, pct_of_spend: pct };
-  });
+  const dataRows = vals.slice(1).filter(isDataRow);
+  return rows.map((r, i) => ({
+    ...r,
+    pct_of_spend: normalizePct(pctIdx >= 0 ? dataRows[i]?.[pctIdx] : undefined, r.pct_of_spend),
+  }));
+}
+
+function parseMeta(vals) {
+  const meta = {};
+  for (const row of vals.slice(1)) {
+    if (row[0]) meta[row[0]] = row[1] ?? '';
+  }
+  return meta;
 }
 
 async function main() {
@@ -69,26 +83,31 @@ async function main() {
   if (overviewRows.length < 2) throw new Error('Overview empty — refusing to overwrite');
 
   const overview = parseOverview(overviewRows);
-  const accounts = table(accountVals);
-  const recurring = table(recurringVals);
-  const spend = parseSpend(spendVals);
-  const meta = {};
-  for (const row of metaVals.slice(1)) {
-    if (row[0]) meta[row[0]] = row[1] ?? '';
-  }
+  const metaFromTab = parseMeta(metaVals);
+
+  const outputs = [
+    { file: 'overview.json', tab: 'Overview', data: overview },
+    { file: 'accounts.json', tab: 'Accounts', data: table(accountVals) },
+    { file: 'recurring.json', tab: 'Recurring', data: table(recurringVals) },
+    { file: 'spend_by_category.json', tab: 'Spend_by_Category', data: parseSpend(spendVals) },
+    // Guard on the Meta tab itself, before Overview fallbacks, so an empty tab can't wipe owner_agent etc.
+    { file: 'meta.json', tab: 'Meta', data: metaFromTab },
+  ].map(o => ({ ...o, existing: readExisting(o.file) }));
+
+  const errors = findEmptyOverwrites(outputs);
+  if (errors.length) throw new Error(errors.join('\n'));
+
+  const meta = { ...metaFromTab };
   if (!meta.last_refreshed && overview['Last refreshed']?.value) {
     meta.last_refreshed = overview['Last refreshed'].value;
   }
   if (!meta.gaps && overview['Data gaps']?.value) {
     meta.gaps = overview['Data gaps'].value;
   }
+  outputs.find(o => o.file === 'meta.json').data = meta;
 
   let changed = false;
-  changed = writeJson('overview.json', overview) || changed;
-  changed = writeJson('accounts.json', accounts) || changed;
-  changed = writeJson('recurring.json', recurring) || changed;
-  changed = writeJson('spend_by_category.json', spend) || changed;
-  changed = writeJson('meta.json', meta) || changed;
+  for (const o of outputs) changed = writeJson(o.file, o.data) || changed;
   console.log(changed ? 'changed' : 'unchanged');
 }
 

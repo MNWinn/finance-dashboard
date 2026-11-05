@@ -2,7 +2,7 @@ name: Sync finance sheet
 
 on:
   schedule:
-    - cron: '0 21 * * *'   # 16:00 America/New_York during EST; after Money Manager's daily refresh
+    - cron: '0 21 * * *'   # 21:00 UTC ≈ 4 PM (EST) / 5 PM (EDT) America/New_York; after Money Manager's daily refresh
   workflow_dispatch:
 
 permissions:
