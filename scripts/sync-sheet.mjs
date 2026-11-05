@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { google } from 'googleapis';
-import { parseOverview, parseTable, normalizePct, findEmptyOverwrites } from './lib/parse.mjs';
+import { parseOverview, parseTable, normalizePct, findEmptyOverwrites, mergeMeta } from './lib/parse.mjs';
 
 const SHEET_ID = '1QYxStHP2I6AU9QmB5-XVkUHa7FrvqRzGwtnJZx2sk3U';
 const OUT = fileURLToPath(new URL('../data/', import.meta.url));
@@ -97,14 +97,8 @@ async function main() {
   const errors = findEmptyOverwrites(outputs);
   if (errors.length) throw new Error(errors.join('\n'));
 
-  const meta = { ...metaFromTab };
-  if (!meta.last_refreshed && overview['Last refreshed']?.value) {
-    meta.last_refreshed = overview['Last refreshed'].value;
-  }
-  if (!meta.gaps && overview['Data gaps']?.value) {
-    meta.gaps = overview['Data gaps'].value;
-  }
-  outputs.find(o => o.file === 'meta.json').data = meta;
+  const metaOut = outputs.find(o => o.file === 'meta.json');
+  metaOut.data = mergeMeta(metaOut.existing, metaFromTab, overview);
 
   let changed = false;
   for (const o of outputs) changed = writeJson(o.file, o.data) || changed;

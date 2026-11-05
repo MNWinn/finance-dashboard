@@ -22,6 +22,7 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
+      - run: npm test
       - name: Sync from Google Sheet
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
