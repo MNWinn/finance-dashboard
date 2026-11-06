@@ -2,6 +2,31 @@ const MONEY_COLS = new Set([
   'current_balance', 'available_balance', 'avg_amount', 'min_amount',
   'max_amount', 'monthly_estimate', 'total_out_30d', 'pct_of_spend',
 ]);
+const INT_COLS = new Set(['occurrences_90d']);
+
+// RFC 4180: quoted fields may contain commas, CR/LF, and "" escapes.
+export function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let quoted = false;
+  const s = String(text ?? '').replace(/^\uFEFF/, '');
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (quoted) {
+      if (c === '"') {
+        if (s[i + 1] === '"') { field += '"'; i++; } else quoted = false;
+      } else field += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && s[i + 1] === '\n') i++;
+      row.push(field); rows.push(row); row = []; field = '';
+    } else field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
 
 export function parseMoney(input) {
   if (input === null || input === undefined || input === '') return null;
@@ -35,11 +60,46 @@ export function normalizePct(raw, parsed) {
   return Math.round(frac * 1e6) / 1e6;
 }
 
-// Precedence: existing file < Meta tab < Overview fallbacks, so a partial Meta tab can't drop keys.
-export function mergeMeta(existing, fromTab, overview) {
-  const meta = { ...(existing ?? {}), ...fromTab };
-  if (overview?.['Last refreshed']?.value) meta.last_refreshed = overview['Last refreshed'].value;
-  if (overview?.['Data gaps']?.value) meta.gaps = overview['Data gaps'].value;
+const isDataRow = (r) => r && r.some((c) => c !== '' && c != null);
+
+export function parseTable(headers, rows) {
+  return rows.filter(isDataRow).map((r) => {
+    const o = {};
+    headers.forEach((h, i) => {
+      const raw = r[i];
+      if (MONEY_COLS.has(h)) o[h] = parseMoney(raw);
+      else if (raw === '' || raw == null) o[h] = null;
+      else if (INT_COLS.has(h)) o[h] = Number.isFinite(Number(raw)) ? Number(raw) : null;
+      else o[h] = raw;
+    });
+    return o;
+  });
+}
+
+// First row is headers.
+export function parseHeaderTable(rows) {
+  if (!rows.length) return [];
+  return parseTable(rows[0], rows.slice(1));
+}
+
+export function parseSpend(rows) {
+  if (!rows.length) return [];
+  const headers = rows[0];
+  const pctIdx = headers.indexOf('pct_of_spend');
+  const dataRows = rows.slice(1).filter(isDataRow);
+  return parseTable(headers, dataRows).map((r, i) => ({
+    ...r,
+    pct_of_spend: normalizePct(pctIdx >= 0 ? dataRows[i][pctIdx] : undefined, r.pct_of_spend),
+  }));
+}
+
+// Meta is key,value rows; an optional "key,value" header row is skipped.
+export function parseMeta(rows) {
+  const meta = {};
+  for (const [k, v] of rows) {
+    if (!k || (k === 'key' && v === 'value')) continue;
+    meta[k] = v ?? '';
+  }
   return meta;
 }
 
@@ -47,25 +107,4 @@ export function entryCount(data) {
   if (Array.isArray(data)) return data.length;
   if (data && typeof data === 'object') return Object.keys(data).length;
   return 0;
-}
-
-// outputs: [{ file, tab, data, existing }], where existing is the parsed current file (or null).
-// Returns error messages for tabs that parsed empty while the existing file has content.
-export function findEmptyOverwrites(outputs) {
-  return outputs
-    .filter(o => entryCount(o.data) === 0 && entryCount(o.existing) > 0)
-    .map(o => `${o.tab} parsed empty — refusing to overwrite non-empty ${o.file}`);
-}
-
-export function parseTable(headers, rows) {
-  return rows.filter(r => r && r.some(c => c !== '' && c != null)).map(r => {
-    const o = {};
-    headers.forEach((h, i) => {
-      const raw = r[i];
-      if (MONEY_COLS.has(h)) o[h] = parseMoney(raw);
-      else if (raw === '' || raw == null) o[h] = null;
-      else o[h] = raw;
-    });
-    return o;
-  });
 }
