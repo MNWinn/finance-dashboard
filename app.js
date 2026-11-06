@@ -1,5 +1,19 @@
+import {
+  parseCsv, parseOverview, parseHeaderTable, parseSpend, parseMeta, entryCount,
+} from './scripts/lib/parse.mjs';
+
 const STALE_MS = 36 * 60 * 60 * 1000;
-const FILES = ['overview', 'accounts', 'recurring', 'spend_by_category', 'meta'];
+const LIVE_TIMEOUT_MS = 10000;
+const PUB_BASE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSDpdF4crgx3BHy32Vki1iD96SkKgemxXsysKwnPm3usTlifslbjZ2yhNT4IXSUowAmnTrnzM_U4fuj/pub';
+
+// name = data/<name>.json snapshot; required = header a live table must have to be accepted.
+const FEEDS = [
+  { name: 'overview', tab: 'Overview', gid: '401796553', parse: parseOverview },
+  { name: 'accounts', tab: 'Accounts', gid: '1430030995', parse: parseHeaderTable, required: 'institution' },
+  { name: 'recurring', tab: 'Recurring', gid: '1942016769', parse: parseHeaderTable, required: 'name' },
+  { name: 'spend_by_category', tab: 'Spend_by_Category', gid: '712914287', parse: parseSpend, required: 'category_primary' },
+  { name: 'meta', tab: 'Meta', gid: '829989513', parse: parseMeta },
+];
 
 const KPIS = [
   ['Cash total', 'Cash'],
@@ -19,10 +33,38 @@ const esc = (v) => v == null ? '' : String(v).replace(/[&<>"']/g, (c) => (
 ));
 const $ = (id) => document.getElementById(id);
 
-async function load(name) {
-  const res = await fetch(`data/${name}.json`, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`${name}.json ${res.status}`);
+async function loadLive(feed) {
+  const url = `${PUB_BASE}?gid=${feed.gid}&single=true&output=csv`;
+  const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(LIVE_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`${feed.tab} ${res.status}`);
+  // Unpublished or unknown tabs come back as 200 text/html.
+  if (!(res.headers.get('content-type') || '').includes('text/csv')) throw new Error(`${feed.tab} not CSV`);
+  const rows = parseCsv(await res.text());
+  if (feed.required && !rows[0]?.includes(feed.required)) throw new Error(`${feed.tab} missing ${feed.required} header`);
+  const data = feed.parse(rows);
+  if (entryCount(data) === 0) throw new Error(`${feed.tab} empty`);
+  return data;
+}
+
+async function loadSnapshot(feed) {
+  const res = await fetch(`data/${feed.name}.json`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`${feed.name}.json ${res.status}`);
   return res.json();
+}
+
+// Live CSV first; fall back to the committed last-known-good snapshot for that tab only.
+async function load(feed) {
+  try {
+    return { data: await loadLive(feed), source: 'live' };
+  } catch (liveErr) {
+    console.warn('Live feed failed, using snapshot:', liveErr);
+    try {
+      return { data: await loadSnapshot(feed), source: 'snapshot' };
+    } catch (snapErr) {
+      console.warn('Snapshot failed:', snapErr);
+      return { data: undefined, source: 'unavailable' };
+    }
+  }
 }
 
 function setBanner(el, text) {
@@ -30,8 +72,8 @@ function setBanner(el, text) {
   el.textContent = text || '';
 }
 
-function unavailable(id, name) {
-  $(id).innerHTML = `<p class="empty">Unavailable — could not load ${esc(name)}.json.</p>`;
+function unavailable(id, tab) {
+  $(id).innerHTML = `<p class="empty">Unavailable — could not load ${esc(tab)} (live feed and snapshot both failed).</p>`;
 }
 
 function formatTime(iso) {
@@ -124,34 +166,48 @@ function renderSpend(rows) {
 }
 
 async function main() {
-  const results = await Promise.allSettled(FILES.map(load));
+  const results = await Promise.all(FEEDS.map(load));
   const data = {};
-  const failed = [];
-  results.forEach((r, i) => {
-    if (r.status === 'fulfilled') data[FILES[i]] = r.value;
-    else failed.push(FILES[i]);
+  const sources = {};
+  FEEDS.forEach((f, i) => {
+    data[f.name] = results[i].data;
+    sources[f.name] = results[i].source;
   });
-  window.__finance = { data, failed };
+  window.__finance = { data, sources };
 
   const { overview, accounts, recurring, spend_by_category: spend, meta } = data;
+  const tabsWith = (src) => FEEDS.filter((f) => sources[f.name] === src).map((f) => f.tab);
+  const snapshotTabs = tabsWith('snapshot');
+  const unavailableTabs = tabsWith('unavailable');
 
-  const refreshed = meta?.last_refreshed || overview?.['Last refreshed']?.value || '';
+  // Timestamps and gaps always come from the sheet data (live preferred), never the browser clock.
+  const metaFirst = sources.meta === 'live' || sources.overview !== 'live';
+  const pick = (metaVal, overviewVal) => (metaFirst ? metaVal || overviewVal : overviewVal || metaVal) || '';
+  const refreshed = pick(meta?.last_refreshed, overview?.['Last refreshed']?.value);
   $('refreshed').textContent = refreshed ? `Last refreshed ${formatTime(refreshed)}` : 'Last refreshed unknown';
 
-  const gaps = meta?.gaps || overview?.['Data gaps']?.value || '';
+  const liveCount = tabsWith('live').length;
+  const sourceEl = $('source');
+  sourceEl.textContent = liveCount === FEEDS.length ? 'Live'
+    : liveCount === 0 ? 'Snapshot'
+    : `Live · snapshot: ${[...snapshotTabs, ...unavailableTabs].join(', ')}`;
+  sourceEl.className = `badge ${liveCount === FEEDS.length ? 'live' : 'snapshot'}`;
+
+  const gaps = pick(meta?.gaps, overview?.['Data gaps']?.value);
   setBanner($('gaps'), gaps ? `Data gaps: ${gaps}` : '');
 
   const notices = [];
-  if (failed.length) notices.push(`Data unavailable: ${failed.map((f) => `${f}.json`).join(', ')}.`);
+  if (snapshotTabs.length) notices.push(`Live feed unavailable for ${snapshotTabs.join(', ')}; showing last-known-good snapshot.`);
+  if (unavailableTabs.length) notices.push(`Data unavailable: ${unavailableTabs.join(', ')}.`);
   const t = Date.parse(refreshed);
   if (!refreshed || !Number.isFinite(t)) notices.push('Last refresh time unknown; data freshness cannot be confirmed.');
   else if (Date.now() - t > STALE_MS) notices.push('Data may be stale (>36 hours since last refresh).');
   setBanner($('stale'), notices.join(' '));
 
   renderKpis(overview);
-  if (Array.isArray(accounts)) renderAccounts(accounts); else unavailable('accounts', 'accounts');
-  if (Array.isArray(recurring)) renderRecurring(recurring); else unavailable('recurring', 'recurring');
-  if (Array.isArray(spend)) renderSpend(spend); else unavailable('spend', 'spend_by_category');
+  if (Array.isArray(accounts)) renderAccounts(accounts); else unavailable('accounts', 'Accounts');
+  if (Array.isArray(recurring)) renderRecurring(recurring); else unavailable('recurring', 'Recurring');
+  if (Array.isArray(spend)) renderSpend(spend); else unavailable('spend', 'Spend_by_Category');
 }
 
 main();
